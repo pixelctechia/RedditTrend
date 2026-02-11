@@ -1,0 +1,21 @@
+# Dependências e ambiente
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Arquivos intermediários (sempre regeneráveis)
+.tmp/
+
+# Segredos e credenciais
+.env
+credentials.json
+token.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

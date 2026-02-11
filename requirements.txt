@@ -1,0 +1,12 @@
+# Dependências do projeto — Top 5 Posts Reddit
+# Instale com: pip install -r requirements.txt
+
+# --- Essenciais ---
+requests>=2.31.0       # Chamadas HTTP à API do Reddit
+python-dotenv>=1.0.0   # Carregar variáveis de ambiente de .env
+
+# --- Opcional: Exportação para Google Sheets ---
+# Descomente as linhas abaixo se quiser usar o export_to_sheets.py
+# google-auth>=2.25.0
+# google-auth-oauthlib>=1.2.0
+# google-api-python-client>=2.110.0
