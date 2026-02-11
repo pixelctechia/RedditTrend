@@ -27,6 +27,8 @@ Saídas:
 import json
 import os
 import sys
+import datetime
+import base64
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
@@ -87,11 +89,18 @@ def load_logs() -> list[dict]:
 
 
 def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
-    posts_json = json.dumps(posts, ensure_ascii=False)
-    all_posts_json = json.dumps(all_posts_data, ensure_ascii=False)
-    config_json = json.dumps(load_config(), ensure_ascii=False)
-    logs_json = json.dumps(load_logs(), ensure_ascii=False)
-    generated = datetime.now(tz=timezone.utc).strftime("%d/%m/%Y às %H:%M UTC")
+    config = load_config() # Load config here to pass to base64 encoding
+    logs = load_logs() # Load logs here to pass to base64 encoding
+
+    posts_json = base64.b64encode(json.dumps(posts, ensure_ascii=False).encode('utf-8')).decode('utf-8')
+    all_posts_json = base64.b64encode(json.dumps(all_posts_data, ensure_ascii=False).encode('utf-8')).decode('utf-8')
+    config_json = base64.b64encode(json.dumps(config, ensure_ascii=False).encode('utf-8')).decode('utf-8')
+    logs_json = base64.b64encode(json.dumps(logs, ensure_ascii=False).encode('utf-8')).decode('utf-8')
+    
+    # Ler comunidades registradas no .env para garantir que apareçam nas tabs
+    env_subs_raw = os.getenv("TARGET_SUBREDDITS", "")
+    env_communities = [s.strip() for s in env_subs_raw.split(",") if s.strip()]
+    env_communities_json = base64.b64encode(json.dumps(env_communities, ensure_ascii=False).encode('utf-8')).decode('utf-8')
 
     subs = {}
     for p in posts:
@@ -267,17 +276,55 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             letter-spacing: -0.3px;
         }}
 
-        .topbar-share {{
-            display: flex;
+
+        /* Status indicator */
+        .status-badge {{
+            display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            cursor: pointer;
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
             transition: var(--transition);
         }}
 
-        .topbar-share:hover {{ color: var(--purple-500); }}
+        .status-badge.online {{
+            background: rgba(34, 197, 94, 0.1);
+            color: #16a34a;
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }}
+
+        .status-badge.offline {{
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }}
+
+        .status-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }}
+
+        .status-badge.online .status-dot {{
+            background: #22c55e;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }}
+
+        .status-badge.offline .status-dot {{
+            background: #ef4444;
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+        }}
+
+        @keyframes pulse-dot {{
+            0%, 100% {{ opacity: 1; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }}
+            50% {{ opacity: 0.6; box-shadow: 0 0 12px rgba(34, 197, 94, 0.9); }}
+        }}
 
         .topbar-right {{
             display: flex;
@@ -292,15 +339,57 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             background: var(--bg-input);
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
-            padding: 0.55rem 1rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            cursor: text;
-            min-width: 200px;
+            padding: 0;
+            min-width: 260px;
             transition: var(--transition);
+            overflow: hidden;
         }}
 
-        .search-box:hover {{ border-color: var(--border-hover); }}
+        .search-box:focus-within {{
+            border-color: var(--purple-400);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }}
+
+        .search-box .search-icon {{
+            padding-left: 0.75rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }}
+
+        .search-box input {{
+            flex: 1;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            font-family: inherit;
+            padding: 0.55rem 0.75rem 0.55rem 0.3rem;
+            outline: none;
+        }}
+
+        .search-box input::placeholder {{
+            color: var(--text-muted);
+        }}
+
+        .search-clear {{
+            background: none;
+            border: none;
+            color: var(--text-light);
+            cursor: pointer;
+            padding: 0.4rem 0.65rem;
+            font-size: 0.85rem;
+            transition: var(--transition);
+            display: none;
+        }}
+
+        .search-clear.visible {{
+            display: block;
+        }}
+
+        .search-clear:hover {{
+            color: var(--text-primary);
+        }}
 
         .btn-primary {{
             display: inline-flex;
@@ -346,59 +435,90 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             color: var(--purple-600);
         }}
 
-        /* ===== TABS ===== */
+        /* ===== COMMUNITY CARDS ===== */
         .tabs-row {{
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            margin-bottom: 1rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: 0.3rem;
-            width: fit-content;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
             animation: fadeIn 0.5s ease 0.1s both;
         }}
 
-        .tab-btn {{
+        .tab-card {{
             position: relative;
-            background: transparent;
-            border: none;
-            border-radius: var(--radius-sm);
-            padding: 0.6rem 1.4rem;
-            font-size: 0.88rem;
-            font-weight: 500;
-            font-family: inherit;
-            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            background: var(--bg-card);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0.7rem 0.85rem;
             cursor: pointer;
             transition: var(--transition);
+            overflow: hidden;
         }}
 
-        .tab-btn:hover {{
-            color: var(--text-secondary);
-            background: var(--bg-input);
+        .tab-card:hover {{
+            border-color: var(--purple-300);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
         }}
 
-        .tab-btn.active {{
-            background: var(--purple-600);
+        .tab-card.active {{
+            background: linear-gradient(135deg, var(--purple-600), var(--purple-500));
+            border-color: var(--purple-600);
+            box-shadow: 0 4px 16px rgba(108, 60, 233, 0.3);
+        }}
+
+        .tab-card.active .tab-card-name,
+        .tab-card.active .tab-card-count {{
             color: white;
-            font-weight: 600;
-            box-shadow: 0 2px 8px rgba(108, 60, 233, 0.25);
         }}
 
-        .tab-count {{
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            font-weight: 600;
+        .tab-card.active .tab-card-count {{
             background: rgba(255,255,255,0.2);
-            border-radius: 4px;
-            padding: 0.1rem 0.4rem;
-            margin-left: 0.3rem;
+            color: white;
         }}
 
-        .tab-btn:not(.active) .tab-count {{
+        .tab-card-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            flex-shrink: 0;
+            object-fit: cover;
+            border: 1.5px solid var(--border);
+        }}
+
+        .tab-card.active .tab-card-avatar {{
+            border-color: rgba(255,255,255,0.4);
+        }}
+
+        .tab-card-info {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .tab-card-name {{
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+        }}
+
+        .tab-card-count {{
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
             background: var(--bg-badge);
             color: var(--purple-500);
+            border-radius: 4px;
+            padding: 0.1rem 0.4rem;
+            margin-top: 0.15rem;
         }}
 
         /* ===== MODE TOGGLE & TIME FILTERS ===== */
@@ -421,6 +541,33 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             padding: 0.25rem;
         }}
 
+        .mode-btn, .filter-btn {{
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-weight: 500;
+        }}
+
+        .mode-btn.active, .filter-btn.active {{
+            background: var(--purple-100);
+            border-color: var(--purple-300);
+            color: var(--purple-700);
+            font-weight: 600;
+        }}
+
+        .filter-group {{
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }}
         .mode-btn {{
             background: transparent;
             border: none;
@@ -1254,12 +1401,12 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             to {{ opacity: 0; transform: translateX(100px); }}
         }}
 
-        /* Import button in topbar */
+        /* Add Community button in topbar */
         .btn-import {{
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            background: linear-gradient(135deg, #f5a623, #e09400);
+            background: linear-gradient(135deg, var(--green-500), #16a34a);
             color: white;
             border: none;
             border-radius: var(--radius-sm);
@@ -1269,12 +1416,98 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             font-family: inherit;
             cursor: pointer;
             transition: var(--transition);
-            box-shadow: 0 2px 8px rgba(245, 166, 35, 0.3);
+            box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
         }}
 
         .btn-import:hover {{
             transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(245, 166, 35, 0.4);
+            box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+        }}
+
+        /* Community list inside modal */
+        .community-list {{
+            list-style: none;
+            padding: 0;
+            margin: 1rem 0 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            max-height: 320px;
+            overflow-y: auto;
+        }}
+
+        .community-list-item {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 0.85rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            transition: var(--transition);
+        }}
+
+        .community-list-item:hover {{
+            border-color: var(--purple-400);
+        }}
+
+        .community-list-item .cl-name {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+
+        .community-list-item .cl-dot {{
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green-500);
+            flex-shrink: 0;
+        }}
+
+        .btn-remove-community {{
+            background: none;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            color: var(--text-light);
+            font-size: 0.78rem;
+            cursor: pointer;
+            padding: 0.25rem 0.6rem;
+            transition: var(--transition);
+            font-family: inherit;
+        }}
+
+        .btn-remove-community:hover {{
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--red-500);
+            border-color: var(--red-500);
+        }}
+
+        .btn-remove-community:disabled {{
+            opacity: 0.4;
+            cursor: not-allowed;
+        }}
+
+        .modal-section-label {{
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+        }}
+
+        .community-count-badge {{
+            font-size: 0.7rem;
+            background: var(--purple-100);
+            color: var(--purple-600);
+            padding: 0.15rem 0.5rem;
+            border-radius: 12px;
+            font-weight: 600;
         }}
 
         /* ===== ANIMATIONS ===== */
@@ -1289,21 +1522,164 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
         }}
 
         /* ===== RESPONSIVE ===== */
-        @media (max-width: 768px) {{
-            .sidebar {{ display: none; }}
-            .main {{ margin-left: 0; padding: 1.25rem; }}
+
+        /* --- Tablet (até 1024px) --- */
+        @media (max-width: 1024px) {{
+            .main {{ padding: 1.5rem; max-width: 100%; }}
             .stats-row {{ grid-template-columns: repeat(2, 1fr); }}
-            .topbar {{ flex-direction: column; align-items: flex-start; gap: 1rem; }}
-            .topbar-right {{ width: 100%; }}
-            .search-box {{ flex: 1; }}
-            .post-footer {{ flex-direction: column; align-items: flex-start; gap: 0.5rem; }}
             .charts-grid, .settings-grid {{ grid-template-columns: 1fr; }}
+            .topbar-right {{ gap: 0.5rem; }}
+            .topbar-right .btn-outline,
+            .topbar-right .btn-primary {{ font-size: 0.78rem; padding: 0.5rem 0.8rem; }}
         }}
 
+        /* --- Mobile (até 768px) --- */
+        @media (max-width: 768px) {{
+            /* Sidebar vira barra inferior */
+            .sidebar {{
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                top: auto;
+                width: 100%;
+                height: 60px;
+                flex-direction: row;
+                justify-content: space-around;
+                padding: 0.4rem 0;
+                gap: 0;
+                border-right: none;
+                border-top: 1px solid var(--border);
+                z-index: 100;
+                background: var(--bg-sidebar);
+            }}
+            .sidebar-logo {{ display: none; }}
+            .sidebar-spacer {{ display: none; }}
+            .sidebar-icon {{
+                width: 44px;
+                height: 44px;
+                font-size: 1.2rem;
+            }}
+
+            .main {{
+                margin-left: 0;
+                padding: 1rem;
+                padding-bottom: 80px; /* espaço para navbar inferior */
+            }}
+
+            /* Topbar empilha verticalmente */
+            .topbar {{
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.75rem;
+                margin-bottom: 1.25rem;
+            }}
+            .topbar-left {{
+                justify-content: space-between;
+                width: 100%;
+            }}
+            .topbar-left h1 {{ font-size: 1.3rem; }}
+            .topbar-right {{
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }}
+            .search-box {{
+                flex: 1 1 100%;
+                min-width: unset;
+                order: -1;
+            }}
+            .topbar-right .btn-import,
+            .topbar-right .btn-outline,
+            .topbar-right .btn-primary {{
+                flex: 1;
+                justify-content: center;
+                font-size: 0.78rem;
+                padding: 0.55rem 0.6rem;
+            }}
+
+            /* Tabs scrollam horizontalmente */
+            /* Community Cards */
+            .tabs-row {{
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.5rem;
+            }}
+            .tab-card {{ padding: 0.6rem 0.7rem; }}
+            .tab-card-avatar {{ width: 28px; height: 28px; }}
+            .tab-card-name {{ font-size: 0.75rem; }}
+
+            /* Controls */
+            .controls-row {{
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+            }}
+            .mode-toggle {{ width: 100%; }}
+            .mode-btn {{ flex: 1; text-align: center; font-size: 0.78rem; }}
+
+            /* Cards de stats */
+            .stats-row {{ grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }}
+            .stat-card {{ padding: 0.9rem; }}
+            .stat-card .value {{ font-size: 1.3rem; }}
+
+            /* Post cards */
+            .post-top {{ flex-direction: column; gap: 0.5rem; }}
+            .post-footer {{ flex-direction: column; align-items: flex-start; gap: 0.5rem; }}
+            .post-pills {{ flex-wrap: wrap; }}
+
+            /* Modal */
+            .modal-box {{
+                width: 100%;
+                max-width: 100vw;
+                max-height: 95vh;
+                border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+                margin-top: auto;
+            }}
+            .modal-overlay {{
+                align-items: flex-end;
+            }}
+            .modal-header {{ padding: 1rem; }}
+            .modal-body {{ padding: 1rem; }}
+            .input-row {{ flex-direction: column; }}
+            .btn-fetch {{ width: 100%; justify-content: center; }}
+
+            /* Charts */
+            .charts-grid {{ grid-template-columns: 1fr; }}
+            .chart-card {{ padding: 1rem; }}
+        }}
+
+        /* --- Mobile pequeno (até 480px) --- */
         @media (max-width: 480px) {{
+            .main {{ padding: 0.75rem; padding-bottom: 75px; }}
+            .topbar-left h1 {{ font-size: 1.1rem; }}
             .stats-row {{ grid-template-columns: 1fr; }}
-            .post-stats {{ gap: 0.35rem; }}
-            .pill {{ font-size: 0.7rem; padding: 0.25rem 0.5rem; }}
+            .stat-card .value {{ font-size: 1.15rem; }}
+            .post-pills {{ gap: 0.25rem; }}
+            .pill {{ font-size: 0.68rem; padding: 0.2rem 0.45rem; }}
+            .post-title {{ font-size: 0.88rem; }}
+            .rank-badge {{ width: 28px; height: 28px; font-size: 0.75rem; }}
+            .tabs-row {{ grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }}
+            .tab-card-name {{ font-size: 0.72rem; }}
+            .tab-card-avatar {{ width: 24px; height: 24px; }}
+            .status-badge {{ font-size: 0.65rem; padding: 0.2rem 0.5rem; }}
+
+            /* Botões de ação viram full-width */
+            .topbar-right .btn-import,
+            .topbar-right .btn-outline,
+            .topbar-right .btn-primary {{
+                font-size: 0.72rem;
+            }}
+
+            /* Toast no mobile */
+            .toast-container {{
+                left: 0.5rem;
+                right: 0.5rem;
+                top: auto;
+                bottom: 70px;
+            }}
+            .toast {{ font-size: 0.8rem; }}
+
+            /* Settings grid */
+            .settings-grid {{ grid-template-columns: 1fr; }}
         }}
     </style>
 </head>
@@ -1327,11 +1703,19 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             <div class="topbar">
                 <div class="topbar-left">
                     <h1 id="pageTitle">Dashboard</h1>
-                    <span class="topbar-share">🔗 Compartilhar</span>
+                    <span class="status-badge" id="statusBadge" title="Verificando...">
+                        <span class="status-dot"></span>
+                        <span id="statusText">...</span>
+                    </span>
                 </div>
                 <div class="topbar-right">
-                    <div class="search-box">🔍 Buscar posts...</div>
-                    <button class="btn-import" onclick="openImportModal()">➕ Importar Post</button>
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchInput" placeholder="Buscar posts..."
+                               oninput="handleSearch()" />
+                        <button class="search-clear" id="searchClear" onclick="clearSearch()">✕</button>
+                    </div>
+                    <button class="btn-import" onclick="openCommunityModal()">➕ Adicionar Comunidade</button>
                     <button class="btn-outline" onclick="location.reload()">🔄 Atualizar</button>
                     <button class="btn-primary" id="downloadBtn">📥 Exportar dados</button>
                 </div>
@@ -1341,10 +1725,13 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             <div class="page active" id="page-dashboard">
                 <div class="tabs-row" id="tabsRow"></div>
                 <div class="controls-row">
-                    <span class="mode-label">Modo:</span>
-                    <div class="mode-toggle" id="modeToggle">
-                        <button class="mode-btn active" data-mode="relevance" onclick="switchMode('relevance')">🏆 Top Relevantes</button>
-                        <button class="mode-btn" data-mode="recent" onclick="switchMode('recent')">🕐 Mais Recentes</button>
+                    <span class="mode-label">Filtro:</span>
+                    <div class="filter-group" id="filterGroup">
+                        <button class="filter-btn active" data-filter="best" onclick="switchFilter('best')" title="Top Relevantes (Engajamento)">🔥 Melhores</button>
+                        <button class="filter-btn" data-filter="hot" onclick="switchFilter('hot')" title="Posts em Destaque">🚀 Destaque</button>
+                        <button class="filter-btn" data-filter="new" onclick="switchFilter('new')" title="Mais Novos">✨ Novos</button>
+                        <button class="filter-btn" data-filter="top" onclick="switchFilter('top')" title="Mais Votados">🏆 Top</button>
+                        <button class="filter-btn" data-filter="rising" onclick="switchFilter('rising')" title="Em Ascensão">📈 Ascensão</button>
                     </div>
                     <div class="time-filters" id="timeFilters">
                         <span class="mode-label" style="margin-right:0.25rem">Período:</span>
@@ -1378,25 +1765,29 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
         </main>
     </div>
 
-    <!-- Import Post Modal -->
-    <div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeImportModal()">
+    <!-- Community Management Modal -->
+    <div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeCommunityModal()">
         <div class="modal-box">
             <div class="modal-header">
-                <h2>➕ Importar Post do Reddit</h2>
-                <button class="modal-close" onclick="closeImportModal()" title="Fechar">✕</button>
+                <h2>🌐 Gerenciar Comunidades</h2>
+                <button class="modal-close" onclick="closeCommunityModal()" title="Fechar">✕</button>
             </div>
             <div class="modal-body">
                 <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:1rem">
-                    Cole a URL de um post do Reddit para visualizar seus dados e detectar a comunidade.
+                    Adicione comunidades do Reddit (subreddits) para monitorar os Top 10 posts em alta.
                 </p>
                 <div class="input-row">
-                    <input class="input-field" id="redditUrlInput" type="url"
-                           placeholder="https://www.reddit.com/r/.../comments/..."
-                           onkeydown="if(event.key==='Enter')fetchRedditPost()" />
-                    <button class="btn-fetch" id="fetchBtn" onclick="fetchRedditPost()">🔍 Buscar</button>
+                    <input class="input-field" id="communityInput" type="text"
+                           placeholder="Ex: python, javascript, devops..."
+                           onkeydown="if(event.key==='Enter')addCommunityFromInput()" />
+                    <button class="btn-fetch" id="addCommunityBtn" onclick="addCommunityFromInput()">➕ Adicionar</button>
                 </div>
-                <div class="fetch-status" id="fetchStatus"></div>
-                <div id="postPreviewArea"></div>
+                <div class="fetch-status" id="communityStatus"></div>
+                <div class="modal-section-label">Comunidades monitoradas <span class="community-count-badge" id="communityCountBadge">0</span></div>
+                <ul class="community-list" id="communityListArea"></ul>
+                <p style="font-size:0.75rem;color:var(--text-light);margin-top:1rem">
+                    ⚠️ Após adicionar ou remover comunidades, execute o pipeline para atualizar os posts.
+                </p>
             </div>
         </div>
     </div>
@@ -1405,13 +1796,17 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        const topPosts = {posts_json};
-        const allPostsData = {all_posts_json};
-        const appConfig = {config_json};
-        const appLogs = {logs_json};
+        function decode(str) {{
+            return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(str), c => c.charCodeAt(0))));
+        }}
+        const topPosts = decode("{posts_json}");
+        const allPostsData = decode("{all_posts_json}");
+        const appConfig = decode("{config_json}");
+        const appLogs = decode("{logs_json}");
+        const envCommunities = decode("{env_communities_json}");
 
         /* Compat: allPosts usado pelo restante (articles, table, trends) */
-        const allPosts = topPosts;
+        const allPosts = allPostsData;
 
         const grouped = {{}};
         topPosts.forEach(p => {{
@@ -1426,13 +1821,23 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             groupedAll[p.subreddit].push(p);
         }});
 
-        const subs = Object.keys(grouped);
+        /* Mesclar comunidades do .env com as extraídas dos posts.
+           Isso garante que comunidades recém-adicionadas (sem posts ainda)
+           apareçam nas tabs e na lista do modal. */
+        const postSubs = Object.keys(grouped);
+        const subs = [...new Set([...envCommunities, ...postSubs])];
+        /* Inicializar grouped/groupedAll para comunidades sem posts */
+        subs.forEach(s => {{
+            if (!grouped[s]) grouped[s] = [];
+            if (!groupedAll[s]) groupedAll[s] = [];
+        }});
         let currentTab = subs[0] || '';
         let currentPage = 'dashboard';
-        let currentMode = 'relevance'; /* 'relevance' | 'recent' */
+        let currentFilter = 'best'; /* 'best' | 'hot' | 'new' | 'top' | 'rising' */
         let currentTimePeriod = 7;      /* 1 (dia), 7 (semana), 30 (mês) */
 
         /* ===== HELPERS ===== */
+        function esc(s) {{ return (s||'').replace(/`/g,"'"); }}
         function getMaxEngagement(posts) {{ return Math.max(...(posts||allPosts).map(p => p.engagement_score || 0), 1); }}
         function getRatioClass(r) {{ if (r >= 0.9) return 'ratio-high'; if (r >= 0.7) return 'ratio-mid'; return 'ratio-low'; }}
         function getInitials(n) {{ return (n||'U').substring(0,2).toUpperCase(); }}
@@ -1514,13 +1919,68 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             renderDashboard();
         }}
 
-        /* ===== DASHBOARD ===== */
+        /* Mapa de ícones fallback por comunidade */
+        const communityIcons = {{
+            'n8n': '⚡', 'automation': '🤖', 'Python': '🐍', 'python': '🐍',
+            'LangChain': '🔗', 'langchain': '🔗', 'agno': '🧠',
+            'huggingface': '🤗', 'ClaudeAI': '🟠', 'claudeai': '🟠',
+            'ChatGPT': '💬', 'chatgpt': '💬', 'grok': '🚀',
+            'Chatbots': '🗨️', 'chatbots': '🗨️', 'Rag': '📚', 'rag': '📚',
+            'javascript': '🟨', 'react': '⚛️', 'typescript': '🔷',
+            'devops': '🔧', 'docker': '🐳', 'kubernetes': '☸️',
+            'machinelearning': '🧬', 'datascience': '📊', 'artificial': '🤖',
+            'openai': '🟢', 'programming': '💻', 'webdev': '🌐',
+            'linux': '🐧', 'golang': '🐹', 'rust': '🦀',
+        }};
+
+        function getSubredditAvatar(name) {{
+            return `https://www.reddit.com/r/${{name}}/about.json`;
+        }}
+
+        /* Cache de avatares */
+        const avatarCache = {{}};
+
+        async function loadAvatar(sub) {{
+            if (avatarCache[sub]) return avatarCache[sub];
+            try {{
+                const resp = await fetch(`https://www.reddit.com/r/${{sub}}/about.json`, {{ signal: AbortSignal.timeout(3000) }});
+                const data = await resp.json();
+                const icon = data?.data?.community_icon?.split('?')[0] || data?.data?.icon_img || '';
+                if (icon) {{
+                    avatarCache[sub] = icon;
+                    return icon;
+                }}
+            }} catch(e) {{ /* fallback */ }}
+            return '';
+        }}
+
         function renderTabs() {{
-            document.getElementById('tabsRow').innerHTML = subs.map(s => {{
+            const container = document.getElementById('tabsRow');
+            container.innerHTML = subs.map(s => {{
                 const active = s === currentTab ? 'active' : '';
-                const count = currentMode === 'relevance' ? (grouped[s]||[]).length : getRecentPosts(s, currentTimePeriod).length;
-                return `<button class="tab-btn ${{active}}" data-tab="${{s}}" onclick="switchTab('${{s}}')">r/${{s}} <span class="tab-count">${{count}}</span></button>`;
+                /* Contagem baseada no filtro simples de quantidade total no sub */
+                const count = (groupedAll[s]||[]).length; 
+                const icon = communityIcons[s] || communityIcons[s.toLowerCase()] || '📌';
+                return `<div class="tab-card ${{active}}" data-tab="${{s}}" onclick="switchTab('${{s}}')">
+                    <img class="tab-card-avatar" id="avatar-${{s}}" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' rx='16' fill='%23f3f0ff'/><text x='50%25' y='55%25' text-anchor='middle' dominant-baseline='middle' font-size='16'>${{encodeURIComponent(icon)}}</text></svg>" alt="r/${{s}}" />
+                    <div class="tab-card-info">
+                        <div class="tab-card-name">r/${{s}}</div>
+                        <span class="tab-card-count">${{count}} posts</span>
+                    </div>
+                </div>`;
             }}).join('');
+
+            /* Carregar avatares reais do Reddit */
+            subs.forEach(async s => {{
+                const url = await loadAvatar(s);
+                if (url) {{
+                    const img = document.getElementById('avatar-' + s);
+                    if (img) {{
+                        img.src = url;
+                        img.onerror = function() {{ /* mantém o SVG fallback */ }};
+                    }}
+                }}
+            }});
         }}
 
         function renderStats(posts) {{
@@ -1535,12 +1995,51 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
                 <div class="stat-card green"><div class="label">📊 Aprovação</div><div class="value">${{Math.round(aR*100)}}%</div><div class="sub">ratio médio</div></div>`;
         }}
 
+        /* Obter posts filtrados e ordenados */
         function getActivePosts() {{
-            if (currentMode === 'relevance') {{
-                return grouped[currentTab] || [];
-            }} else {{
-                return getRecentPosts(currentTab, currentTimePeriod);
+            let posts = groupedAll[currentTab] || [];
+            if (posts.length === 0) return [];
+
+            /* 1. Filtro de Tempo */
+            const now = Date.now() / 1000;
+            const cutoff = now - (currentTimePeriod * 86400); 
+            
+            posts = posts.filter(p => {{
+                const ts = p.created_utc || (p.created_at ? new Date(p.created_at).getTime()/1000 : 0);
+                return ts >= cutoff;
+            }});
+
+            /* 2. Filtro de Categoria (Ordenação) */
+            /* clonar array para sort */
+            let sorted = [...posts];
+
+            switch(currentFilter) {{
+                case 'hot': 
+                    /* Hot: Score alto (geralmente recente) */
+                    sorted.sort((a,b) => (b.score||0) - (a.score||0));
+                    break;
+                case 'new': 
+                    /* New: Recentes */
+                    sorted.sort((a,b) => ((b.created_utc||0) - (a.created_utc||0)));
+                    break;
+                case 'top': 
+                    /* Top: Score alto (semelhante a Hot, mas estritamente votos) */
+                    sorted.sort((a,b) => (b.score||0) - (a.score||0));
+                    break;
+                case 'rising': 
+                    /* Rising: Ratio alto e recentes (< 24h na janela filtrada) */
+                    /* Heurística: Score * Ratio */
+                    sorted.sort((a,b) => ((b.score||0)*(b.upvote_ratio||0)) - ((a.score||0)*(a.upvote_ratio||0)));
+                    break;
+                case 'best': 
+                default:
+                    /* Best: Engajamento (nosso algoritmo) */
+                    sorted.sort((a,b) => (b.engagement_score||0) - (a.engagement_score||0));
+                    break;
             }}
+
+            /* Retornar top 10 (ou mais dependendo da configuração, mas pedido foi "coloca os 10 mais") */
+            return sorted.slice(0, 10);
         }}
 
         function renderDashboard() {{
@@ -1554,32 +2053,37 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             const maxE = getMaxEngagement(posts);
             const list = document.getElementById('postsList');
 
-            if (currentMode === 'relevance') {{
-                document.getElementById('sectionTitle').textContent = `🏆 Top Relevantes — r/${{currentTab}}`;
-            }} else {{
-                document.getElementById('sectionTitle').textContent = `🕐 Mais Recentes (${{getTimePeriodLabel(currentTimePeriod)}}) — r/${{currentTab}}`;
-            }}
+            const labels = {{
+                best: '🔥 Melhores (Engajamento)',
+                hot: '🚀 Destaque',
+                new: '✨ Mais Novos',
+                top: '🏆 Mais Votados',
+                rising: '📈 Em Ascensão'
+            }};
+            const label = labels[currentFilter] || 'Posts';
+
+            document.getElementById('sectionTitle').textContent = `${{label}} — r/${{currentTab}}`;
             document.getElementById('viewAllLabel').textContent = `${{posts.length}} posts`;
 
             if (posts.length === 0) {{
                 list.innerHTML = `<div style="text-align:center;padding:3rem 1rem;color:var(--text-muted)">
                     <div style="font-size:2.5rem;margin-bottom:0.75rem">📭</div>
-                    <p style="font-size:0.9rem">Nenhum post encontrado ${{currentMode==='recent' ? 'nas ' + getTimePeriodLabel(currentTimePeriod) : ''}} em r/${{currentTab}}.</p>
-                    ${{currentMode==='recent' ? '<p style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-light)">Tente ampliar o período de tempo.</p>' : ''}}
+                    <p style="font-size:0.9rem">Nenhum post encontrado para o filtro <strong>${{labels[currentFilter]}}</strong> em r/${{currentTab}}.</p>
+                    <p style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-light)">Tente ampliar o período de tempo.</p>
                 </div>`;
                 return;
             }}
 
             list.innerHTML = posts.map((p,i) => {{
-                const rank = currentMode === 'relevance' ? (p.rank||(i+1)) : (i+1);
+                const rank = (i+1);
                 const rC=getRatioClass(p.upvote_ratio||0), rP=Math.round((p.upvote_ratio||0)*100);
                 const eP=Math.min(((p.engagement_score||0)/maxE)*100,100);
-                const ex=(p.selftext||'').replace(/\\n/g,' ').substring(0,180);
-                const fl=p.flair?`<div class="post-flair">${{p.flair}}</div>`:'';
+                const ex=esc((p.selftext||'').replace(/\\n/g,' ').substring(0,180));
+                const fl=p.flair?`<div class="post-flair">${{esc(p.flair)}}</div>`:'';
                 const postIdx = allPosts.findIndex(ap => ap.permalink === p.permalink);
-                const rankClass = rank <= 5 ? `r${{rank}}` : 'r5';
+                const rankClass = rank <= 5 ? 'r' + rank : 'r5';
                 return `<div class="post-card"><div class="post-top"><div class="rank-badge ${{rankClass}}">${{rank}}</div><div class="post-content">
-                    <div class="post-title"><a href="${{p.permalink}}" target="_blank">${{p.title}}</a></div>
+                    <div class="post-title"><a href="${{p.permalink}}" target="_blank">${{esc(p.title)}}</a></div>
                     ${{ex?`<p class="post-excerpt">${{ex}}</p>`:''}}
                     ${{fl}}
                     <div class="post-stats">
@@ -1599,12 +2103,19 @@ def generate_html(posts: list[dict], all_posts_data: list[dict]) -> str:
             requestAnimationFrame(()=>{{ setTimeout(()=>{{ document.querySelectorAll('.engagement-fill').forEach(b=>{{b.style.width=b.dataset.width;}}); }},150); }});
         }}
 
+        function switchFilter(filter) {{
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => {{
+                b.classList.toggle('active', b.dataset.filter === filter);
+            }});
+            renderDashboard();
+        }}
+
         function switchTab(sub) {{ currentTab=sub; renderDashboard(); }}
 
         /* ===== MARKDOWN GENERATOR ===== */
         const savedArticles = [];
 
-        function slugify(text) {{ return text.toLowerCase().replace(/[^\\w\\s-]/g,'').replace(/[\\s_]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').substring(0,60); }}
 
         function fmtDateBr(iso) {{
             if (!iso) return 'Data não disponível';
@@ -1800,7 +2311,7 @@ ${{content}}
                     <tbody>${{sorted.map((p,i) => `<tr>
                         <td class="mono">${{i+1}}</td>
                         <td><span class="pill engagement" style="font-size:0.7rem">r/${{p.subreddit}}</span></td>
-                        <td class="td-title"><a href="${{p.permalink}}" target="_blank">${{p.title}}</a></td>
+                        <td class="td-title"><a href="${{p.permalink}}" target="_blank">${{esc(p.title)}}</a></td>
                         <td class="mono" style="color:var(--gold-500)">${{Math.round(p.engagement_score||0)}}</td>
                         <td class="mono" style="color:var(--green-500)">${{p.score||0}}</td>
                         <td class="mono" style="color:var(--blue-500)">${{p.num_comments||0}}</td>
@@ -1823,14 +2334,14 @@ ${{content}}
 
             // Top posts bar chart
             const top10 = [...allPosts].sort((a,b)=>(b.engagement_score||0)-(a.engagement_score||0));
-            let postBars = top10.map(p => ({{label: p.title.substring(0,40)+(p.title.length>40?'...':''), value: Math.round(p.engagement_score||0), sub: p.subreddit}}));
+            let postBars = top10.map(p => ({{label: esc(p.title.substring(0,40))+(p.title.length>40?'...':''), value: Math.round(p.engagement_score||0), sub: p.subreddit}}));
 
             // Comments chart
-            let commentBars = top10.map(p => ({{label: p.title.substring(0,40)+(p.title.length>40?'...':''), value: p.num_comments||0}}));
+            let commentBars = top10.map(p => ({{label: esc(p.title.substring(0,40))+(p.title.length>40?'...':''), value: p.num_comments||0}}));
             const maxC = Math.max(...commentBars.map(b=>b.value),1);
 
             // Score chart
-            let scoreBars = top10.map(p => ({{label: p.title.substring(0,40)+(p.title.length>40?'...':''), value: p.score||0}}));
+            let scoreBars = top10.map(p => ({{label: esc(p.title.substring(0,40))+(p.title.length>40?'...':''), value: p.score||0}}));
             const maxS = Math.max(...scoreBars.map(b=>b.value),1);
 
             document.getElementById('page-trends').innerHTML = `
@@ -1931,188 +2442,165 @@ ${{content}}
             URL.revokeObjectURL(url);
         }});
 
-        /* ===== IMPORT POST & COMMUNITY MANAGEMENT ===== */
-        const isServerMode = window.location.protocol.startsWith('http');
-        const API_BASE = window.location.origin;
+        /* ===== API CONFIG ===== */
+        const isServerMode = true;
+        const API_BASE = window.location.protocol.startsWith('http')
+            ? window.location.origin
+            : 'http://localhost:5050';
 
-        function openImportModal() {{
-            document.getElementById('importModal').classList.add('open');
-            setTimeout(() => document.getElementById('redditUrlInput').focus(), 200);
+        /* ===== SEARCH POSTS ===== */
+        let searchTimeout = null;
+
+        function handleSearch() {{
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(searchPosts, 250);
+            const val = document.getElementById('searchInput').value;
+            document.getElementById('searchClear').classList.toggle('visible', val.length > 0);
         }}
 
-        function closeImportModal() {{
-            document.getElementById('importModal').classList.remove('open');
-            document.getElementById('redditUrlInput').value = '';
-            document.getElementById('fetchStatus').textContent = '';
-            document.getElementById('fetchStatus').className = 'fetch-status';
-            document.getElementById('postPreviewArea').innerHTML = '';
+        function clearSearch() {{
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchClear').classList.remove('visible');
+            renderDashboard();
         }}
 
-        function parseRedditUrl(url) {{
-            const rxFull = new RegExp('(?:https?://)?(?:www\\\\.|old\\\\.)?reddit\\\\.com/r/(\\\\w+)/comments/(\\\\w+)');
-            const rxShare = new RegExp('(?:https?://)?(?:www\\\\.|old\\\\.)?reddit\\\\.com/r/(\\\\w+)/s/(\\\\w+)');
-            const rxShort = new RegExp('(?:https?://)?redd\\\\.it/(\\\\w+)');
-            let m = url.match(rxFull);
-            if (m) return {{ sub: m[1], id: m[2], type: 'post' }};
-            m = url.match(rxShare);
-            if (m) return {{ sub: m[1], shareId: m[2], type: 'share' }};
-            m = url.match(rxShort);
-            if (m) return {{ sub: null, id: m[1], type: 'short' }};
-            return null;
-        }}
-
-        function isSubredditOnlyUrl(url) {{
-            return new RegExp('(?:https?://)?(?:www\\\\.|old\\\\.)?reddit\\\\.com/r/\\\\w+/?$').test(url.trim());
-        }}
-
-        async function fetchRedditPost() {{
-            const url = document.getElementById('redditUrlInput').value.trim();
-            if (!url) {{ showToast('Cole uma URL do Reddit primeiro.', 'error'); return; }}
-
-            const status = document.getElementById('fetchStatus');
-            const btn = document.getElementById('fetchBtn');
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Buscando...';
-            status.textContent = 'Conectando ao Reddit...';
-            status.className = 'fetch-status';
-
-            let result;
-            try {{
-                if (isServerMode) {{
-                    /* Via servidor local (proxy — mais confiável) */
-                    const resp = await fetch(`${{API_BASE}}/api/fetch-post?url=${{encodeURIComponent(url)}}`);
-                    result = await resp.json();
-                }} else {{
-                    /* Fallback: busca direta via Reddit API */
-                    if (isSubredditOnlyUrl(url)) {{
-                        result = {{ error: 'Esta é uma URL de subreddit, não de post. Cole a URL de um post específico (com /comments/ ou /s/ na URL).' }};
-                    }} else {{
-                        const parsed = parseRedditUrl(url);
-                        if (!parsed) {{
-                            result = {{ error: 'URL inválida. Formatos aceitos: reddit.com/r/.../comments/..., reddit.com/r/.../s/..., redd.it/...' }};
-                        }} else if (parsed.type === 'share') {{
-                            result = {{ error: 'Share links (/s/) precisam do servidor para resolver. Inicie: python execution/server.py' }};
-                        }} else {{
-                            const apiUrl = parsed.sub
-                            ? `https://www.reddit.com/r/${{parsed.sub}}/comments/${{parsed.id}}.json`
-                            : `https://www.reddit.com/comments/${{parsed.id}}.json`;
-                            const resp = await fetch(apiUrl);
-                            const data = await resp.json();
-                            const pd = data[0].data.children[0].data;
-                            const subName = pd.subreddit || parsed.sub || '';
-                            const isTracked = subs.map(s=>s.toLowerCase()).includes(subName.toLowerCase());
-                            result = {{
-                            success: true,
-                            post: {{
-                            subreddit: subName,
-                            title: pd.title || '',
-                            score: pd.score || 0,
-                            num_comments: pd.num_comments || 0,
-                            upvote_ratio: pd.upvote_ratio || 0,
-                            author: pd.author || '[deleted]',
-                            selftext: (pd.selftext||'').substring(0,500),
-                            permalink: `https://reddit.com${{pd.permalink||''}}`,
-                            created_utc: pd.created_utc || 0,
-                            link_flair_text: pd.link_flair_text || '',
-                            subreddit_subscribers: pd.subreddit_subscribers || 0,
-                            }},
-                            community: {{
-                            name: subName,
-                            is_tracked: isTracked,
-                            subscribers: pd.subreddit_subscribers || 0,
-                            }},
-                            }};
-                            }}
-                    }}
-                }}
-            }} catch (err) {{
-                result = {{ error: isServerMode
-                    ? `Erro ao conectar ao servidor: ${{err.message}}`
-                    : `Erro de conexão. Inicie o servidor: python execution/server.py` }};
-            }}
-
-            btn.disabled = false;
-            btn.innerHTML = '🔍 Buscar';
-
-            if (result.error) {{
-                status.textContent = '❌ ' + result.error;
-                status.className = 'fetch-status error';
-                document.getElementById('postPreviewArea').innerHTML = '';
+        function searchPosts() {{
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (!query) {{
+                renderDashboard();
                 return;
             }}
 
-            status.textContent = '✅ Post encontrado!';
-            status.className = 'fetch-status';
-            renderPostPreview(result);
-        }}
+            /* Buscar em TODOS os posts de TODAS as comunidades */
+            const results = allPosts.filter(p => {{
+                const title = (p.title || '').toLowerCase();
+                const author = (p.author || '').toLowerCase();
+                const sub = (p.subreddit || '').toLowerCase();
+                const flair = (p.flair || p.link_flair_text || '').toLowerCase();
+                const text = (p.selftext || '').toLowerCase();
+                return title.includes(query) || author.includes(query) ||
+                       sub.includes(query) || flair.includes(query) || text.includes(query);
+            }});
 
-        function renderPostPreview(result) {{
-            const p = result.post;
-            const c = result.community;
-            const rClass = getRatioClass(p.upvote_ratio || 0);
-            const rPct = Math.round((p.upvote_ratio || 0) * 100);
-            const excerpt = (p.selftext || '').replace(/\\n/g, ' ').substring(0, 250);
-            const subsCount = c.subscribers ? c.subscribers.toLocaleString('pt-BR') : '—';
+            /* Renderizar resultados da busca */
+            document.getElementById('sectionTitle').textContent = `🔍 Resultados para "${{query}}"`;
+            document.getElementById('viewAllLabel').textContent = `${{results.length}} posts encontrados`;
 
-            let communityHtml = '';
-            if (c.is_tracked) {{
-                communityHtml = `
-                    <div class="community-box tracked">
-                        <div class="community-header">
-                            <span class="community-name">
-                                🏷️ r/${{c.name}}
-                                <span class="community-tag active">✅ Monitorada</span>
-                            </span>
-                        </div>
-                        <div class="community-detail">
-                            Esta comunidade já está no seu sistema. ${{subsCount}} membros.
-                        </div>
-                    </div>`;
-            }} else {{
-                communityHtml = `
-                    <div class="community-box new">
-                        <div class="community-header">
-                            <span class="community-name">
-                                🏷️ r/${{c.name}}
-                                <span class="community-tag new-tag">🆕 Nova comunidade</span>
-                            </span>
-                        </div>
-                        <div class="community-detail">
-                            Esta comunidade ainda não está no seu sistema. ${{subsCount}} membros.
-                            ${{!isServerMode ? '<br><strong>⚠️ Inicie o servidor para adicionar:</strong> <code>python execution/server.py</code>' : ''}}
-                        </div>
-                        <button class="btn-add-community" id="btnAddCommunity"
-                                onclick="addCommunityFromModal('${{c.name}}')"
-                                ${{!isServerMode ? 'disabled title=\"Requer servidor local\"' : ''}}>
-                            ➕ Adicionar r/${{c.name}} ao sistema
-                        </button>
-                    </div>`;
+            renderStats(results);
+
+            const maxE = getMaxEngagement(results);
+            const list = document.getElementById('postsList');
+
+            if (results.length === 0) {{
+                list.innerHTML = `<div style="text-align:center;padding:3rem 1rem;color:var(--text-muted)">
+                    <div style="font-size:2.5rem;margin-bottom:0.75rem">🔍</div>
+                    <p style="font-size:0.9rem">Nenhum post encontrado para "<strong>${{query}}</strong>".</p>
+                    <p style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-light)">Tente outro termo de busca.</p>
+                </div>`;
+                return;
             }}
 
-            document.getElementById('postPreviewArea').innerHTML = `
-                <div class="preview-card">
-                    <div class="pc-title"><a href="${{p.permalink}}" target="_blank">${{p.title}}</a></div>
-                    ${{excerpt ? `<div class="pc-excerpt">${{excerpt}}</div>` : ''}}
-                    <div class="pc-stats">
-                        <span class="pill engagement"><span class="pill-icon">🔥</span> ${{Math.round((p.score||0)*1 + (p.num_comments||0)*2 + (p.upvote_ratio||0)*50)}}</span>
+            list.innerHTML = results.map((p,i) => {{
+                const rank = i + 1;
+                const rC=getRatioClass(p.upvote_ratio||0), rP=Math.round((p.upvote_ratio||0)*100);
+                const eP=Math.min(((p.engagement_score||0)/maxE)*100,100);
+                const ex=esc((p.selftext||'').replace(/\\\\n/g,' ').substring(0,180));
+                const fl=p.flair?`<div class="post-flair">${{esc(p.flair)}}</div>`:'';
+                const rankClass = rank <= 5 ? `r${{rank}}` : 'r5';
+                return `<div class="post-card"><div class="post-top"><div class="rank-badge ${{rankClass}}">${{rank}}</div><div class="post-content">
+                    <div class="post-title"><a href="${{p.permalink}}" target="_blank">${{esc(p.title)}}</a></div>
+                    ${{ex?`<p class="post-excerpt">${{ex}}</p>`:''}}
+                    ${{fl}}
+                    <div class="post-pills">
+                        <span class="pill engagement"><span class="pill-icon">🔥</span> ${{Math.round(p.engagement_score||0)}}</span>
                         <span class="pill score"><span class="pill-icon">⬆️</span> ${{(p.score||0).toLocaleString('pt-BR')}}</span>
                         <span class="pill comments"><span class="pill-icon">💬</span> ${{(p.num_comments||0).toLocaleString('pt-BR')}}</span>
-                        <span class="pill ${{rClass}}"><span class="pill-icon">📊</span> ${{rPct}}%</span>
-                    </div>
-                    <div class="pc-meta">
-                        <span>👤 u/${{p.author}}</span>
-                        <span>📂 r/${{p.subreddit}}</span>
-                        ${{p.link_flair_text ? `<span>🏷️ ${{p.link_flair_text}}</span>` : ''}}
-                    </div>
-                </div>
-                ${{communityHtml}}
-            `;
+                        <span class="pill ${{rC}}"><span class="pill-icon">📊</span> ${{rP}}%</span>
+                        <span class="pill" style="background:var(--purple-50);color:var(--purple-600)"><span class="pill-icon">📂</span> r/${{p.subreddit||''}}</span>
+                    </div></div></div>
+                    <div class="engagement-bar"><div class="engagement-fill" style="width:${{eP.toFixed(1)}}%"></div></div>
+                </div>`;
+            }}).join('');
         }}
 
-        async function addCommunityFromModal(name) {{
-            const btn = document.getElementById('btnAddCommunity');
+        /* ===== COMMUNITY MANAGEMENT ===== */
+
+        function openCommunityModal() {{
+            document.getElementById('importModal').classList.add('open');
+            setTimeout(() => document.getElementById('communityInput').focus(), 200);
+            renderCommunityList();
+        }}
+
+        function closeCommunityModal() {{
+            document.getElementById('importModal').classList.remove('open');
+            document.getElementById('communityInput').value = '';
+            document.getElementById('communityStatus').textContent = '';
+            document.getElementById('communityStatus').className = 'fetch-status';
+        }}
+
+        function renderCommunityList() {{
+            const list = document.getElementById('communityListArea');
+            const badge = document.getElementById('communityCountBadge');
+            badge.textContent = subs.length;
+
+            if (subs.length === 0) {{
+                list.innerHTML = '<li style="text-align:center;padding:1.5rem;color:var(--text-light);font-size:0.85rem">Nenhuma comunidade cadastrada.</li>';
+                return;
+            }}
+
+            list.innerHTML = subs.map(s => {{
+                const count = (grouped[s] || []).length;
+                return `<li class="community-list-item">
+                    <span class="cl-name"><span class="cl-dot"></span> r/${{s}} <span style="color:var(--text-light);font-size:0.75rem">(${{count}} posts)</span></span>
+                    <button class="btn-remove-community" onclick="removeCommunity('${{s}}')" title="Remover r/${{s}}"
+                            ${{!isServerMode ? 'disabled' : ''}}>🗑️ Remover</button>
+                </li>`;
+            }}).join('');
+        }}
+
+        async function addCommunityFromInput() {{
+            const input = document.getElementById('communityInput');
+            const status = document.getElementById('communityStatus');
+            const btn = document.getElementById('addCommunityBtn');
+            let name = input.value.trim();
+
+            /* Limpar prefixos como r/ ou /r/ */
+            name = name.replace(/^\/?(r\/)/i, '');
+            /* Remover URL completa se colada */
+            const urlMatch = name.match(/reddit\.com\/r\/(\w+)/i);
+            if (urlMatch) name = urlMatch[1];
+
+            if (!name) {{
+                status.textContent = '❌ Digite o nome da comunidade (ex: python).';
+                status.className = 'fetch-status error';
+                return;
+            }}
+
+            /* Validar: só letras, números e underscore */
+            if (!/^\w+$/.test(name)) {{
+                status.textContent = '❌ Nome inválido. Use apenas letras, números e _.';
+                status.className = 'fetch-status error';
+                return;
+            }}
+
+            /* Verificar duplicidade local */
+            if (subs.map(s => s.toLowerCase()).includes(name.toLowerCase())) {{
+                status.textContent = `ℹ️ r/${{name}} já está na lista.`;
+                status.className = 'fetch-status';
+                input.value = '';
+                return;
+            }}
+
+            if (!isServerMode) {{
+                status.textContent = '⚠️ Inicie o servidor para adicionar: python execution/server.py';
+                status.className = 'fetch-status error';
+                return;
+            }}
+
             btn.disabled = true;
             btn.innerHTML = '⏳ Adicionando...';
+            status.textContent = 'Adicionando comunidade...';
+            status.className = 'fetch-status';
 
             try {{
                 const resp = await fetch(`${{API_BASE}}/api/add-community`, {{
@@ -2123,29 +2611,94 @@ ${{content}}
                 const result = await resp.json();
 
                 if (result.success) {{
-                    btn.innerHTML = '✅ Adicionada!';
-                    btn.className = 'btn-add-community done';
-                    showToast(`r/${{name}} adicionada ao sistema! Execute o pipeline para buscar os posts.`, 'success');
+                    status.textContent = `✅ r/${{name}} adicionada! Buscando posts...`;
+                    status.className = 'fetch-status';
+                    showToast(`r/${{name}} adicionada! Buscando posts automaticamente...`, 'success');
 
-                    /* Atualizar comunidades visíveis se a aba não existir */
+                    /* Atualizar comunidades visíveis */
                     if (!grouped[name]) {{
                         grouped[name] = [];
                         if (!groupedAll[name]) groupedAll[name] = [];
                         if (!subs.includes(name)) subs.push(name);
                         renderTabs();
                     }}
+                    input.value = '';
+                    renderCommunityList();
+
+                    /* Executar pipeline automaticamente */
+                    btn.innerHTML = '⏳ Buscando posts...';
+                    try {{
+                        const pipeResp = await fetch(`${{API_BASE}}/api/run-pipeline`, {{
+                            method: 'POST',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                        }});
+                        const pipeResult = await pipeResp.json();
+                        if (pipeResult.success) {{
+                            status.textContent = `✅ Posts de r/${{name}} carregados! Recarregando...`;
+                            showToast('Pipeline concluído! Recarregando dashboard...', 'success');
+                            setTimeout(() => location.reload(), 1500);
+                            return;
+                        }} else {{
+                            status.textContent = `⚠️ Comunidade salva, mas erro ao buscar posts.`;
+                            showToast(pipeResult.error || 'Erro no pipeline.', 'error');
+                        }}
+                    }} catch (pipeErr) {{
+                        status.textContent = `⚠️ Comunidade salva, mas não foi possível buscar posts.`;
+                        showToast(`Erro de conexão ao pipeline: ${{pipeErr.message}}`, 'error');
+                    }}
                 }} else if (result.exists) {{
-                    btn.innerHTML = '✅ Já registrada';
-                    btn.className = 'btn-add-community done';
-                    showToast(`r/${{name}} já está no sistema.`, 'info');
+                    status.textContent = `ℹ️ r/${{name}} já está registrada.`;
+                    status.className = 'fetch-status';
+                    input.value = '';
                 }} else {{
-                    btn.disabled = false;
-                    btn.innerHTML = `➕ Adicionar r/${{name}} ao sistema`;
-                    showToast(result.error || 'Erro ao adicionar comunidade.', 'error');
+                    status.textContent = '❌ ' + (result.error || 'Erro ao adicionar.');
+                    status.className = 'fetch-status error';
                 }}
             }} catch (err) {{
-                btn.disabled = false;
-                btn.innerHTML = `➕ Adicionar r/${{name}} ao sistema`;
+                status.textContent = `❌ Erro de conexão: ${{err.message}}`;
+                status.className = 'fetch-status error';
+            }}
+
+            btn.disabled = false;
+            btn.innerHTML = '➕ Adicionar';
+        }}
+
+        async function removeCommunity(name) {{
+            if (!isServerMode) {{
+                showToast('Inicie o servidor para remover comunidades.', 'error');
+                return;
+            }}
+
+            if (!confirm(`Remover r/${{name}} da lista de monitoramento?`)) return;
+
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/remove-community`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ name: name }}),
+                }});
+                const result = await resp.json();
+
+                if (result.success) {{
+                    showToast(`r/${{name}} removida do sistema.`, 'success');
+
+                    /* Atualizar estado local */
+                    const idx = subs.findIndex(s => s.toLowerCase() === name.toLowerCase());
+                    if (idx >= 0) subs.splice(idx, 1);
+                    delete grouped[name];
+                    delete groupedAll[name];
+
+                    /* Se era a aba ativa, mudar para a primeira */
+                    if (currentTab.toLowerCase() === name.toLowerCase()) {{
+                        currentTab = subs[0] || '';
+                    }}
+
+                    renderDashboard();
+                    renderCommunityList();
+                }} else {{
+                    showToast(result.error || 'Erro ao remover.', 'error');
+                }}
+            }} catch (err) {{
                 showToast(`Erro de conexão: ${{err.message}}`, 'error');
             }}
         }}
@@ -2165,7 +2718,34 @@ ${{content}}
         }}
 
         /* ===== INIT ===== */
-        renderDashboard();
+        try {{
+            renderDashboard();
+        }} catch(e) {{
+            console.error('❌ renderDashboard error:', e);
+            document.getElementById('postsList').innerHTML = '<div style=\"padding:2rem;color:red;font-size:1rem\"><h3>Erro ao renderizar dashboard:</h3><pre>' + e.message + '\\n' + e.stack + '</pre></div>';
+        }}
+
+        /* ===== SERVER STATUS CHECK ===== */
+        async function checkServerStatus() {{
+            const badge = document.getElementById('statusBadge');
+            const text = document.getElementById('statusText');
+            try {{
+                const resp = await fetch(`${{API_BASE}}/api/communities`, {{ signal: AbortSignal.timeout(4000) }});
+                if (resp.ok) {{
+                    badge.className = 'status-badge online';
+                    badge.title = 'Servidor ativo em ' + API_BASE;
+                    text.textContent = 'Online';
+                }} else {{
+                    throw new Error('not ok');
+                }}
+            }} catch(e) {{
+                badge.className = 'status-badge offline';
+                badge.title = 'Servidor indisponível. Inicie: python execution/server.py';
+                text.textContent = 'Offline';
+            }}
+        }}
+        checkServerStatus();
+        setInterval(checkServerStatus, 30000);
     </script>
 </body>
 </html>"""
@@ -2185,11 +2765,30 @@ def main():
     print(f"✅ App gerado: {abs_path}")
     print(f"📊 {len(posts)} posts renderizados")
 
+    # Auto-start server.py in background so community management works
+    import subprocess
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    server_script = os.path.join(script_dir, "server.py")
+    project_dir = os.path.dirname(script_dir)
     try:
-        webbrowser.open(f"file://{abs_path}")
-        print("🌐 Abrindo no navegador...")
-    except Exception:
-        print(f"   Abra manualmente: file://{abs_path}")
+        subprocess.Popen(
+            [sys.executable, server_script],
+            cwd=project_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        print("🚀 Servidor iniciado em http://localhost:5050")
+        import time
+        time.sleep(1)  # aguardar servidor subir
+        webbrowser.open("http://localhost:5050")
+        print("🌐 Dashboard aberto no navegador!")
+    except Exception as e:
+        print(f"⚠️ Não foi possível iniciar o servidor: {e}")
+        try:
+            webbrowser.open(f"file://{abs_path}")
+            print("🌐 Abrindo versão local no navegador...")
+        except Exception:
+            print(f"   Abra manualmente: file://{abs_path}")
 
 
 if __name__ == "__main__":

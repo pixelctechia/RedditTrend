@@ -82,7 +82,7 @@ engagement = (score × WEIGHT_SCORE) + (num_comments × WEIGHT_COMMENTS) + (upvo
   - Página Trends (gráficos de barras CSS)
   - Página Configurações (parâmetros do .env)
   - Página Logs (histórico de execuções)
-  - **Botão "➕ Importar Post"** no topbar para buscar posts por URL e adicionar novas comunidades
+  - **Botão "➕ Adicionar Comunidade"** no topbar para gerenciar subreddits (adicionar/remover)
 - Sempre retorna exatamente **10 posts** por subreddit no modo ativo
 - Salva em `.tmp/app.html`
 
@@ -93,8 +93,9 @@ engagement = (score × WEIGHT_SCORE) + (num_comments × WEIGHT_COMMENTS) + (upvo
 - Fornece API para:
   - `GET /api/fetch-post?url=...` — busca dados de um post do Reddit por URL
   - `POST /api/add-community` — adiciona subreddit ao `TARGET_SUBREDDITS` no `.env`
+  - `POST /api/remove-community` — remove subreddit do `TARGET_SUBREDDITS` no `.env`
   - `GET /api/communities` — lista comunidades registradas
-- Permite importar posts e adicionar comunidades **diretamente pelo dashboard**
+- Permite adicionar e remover comunidades **diretamente pelo dashboard**
 - Usa `ThreadingHTTPServer` para requests concorrentes
 
 ### Passo 5 (Opcional): Exportar para Google Sheets

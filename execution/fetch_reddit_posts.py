@@ -42,7 +42,7 @@ load_dotenv()
 
 TARGET_SUBREDDITS = os.getenv("TARGET_SUBREDDITS", "n8n,automation")
 FETCH_LIMIT = int(os.getenv("FETCH_LIMIT", "100"))
-TOP_N = int(os.getenv("TOP_N", "5"))
+TOP_N = int(os.getenv("TOP_N", "10"))
 PERIOD_DAYS = int(os.getenv("PERIOD_DAYS", "7"))
 TMP_DIR = os.getenv("TMP_DIR", ".tmp")
 
@@ -60,93 +60,75 @@ USER_AGENT = "Mozilla/5.0 (compatible; top5bot/1.0; Python script for educationa
 Path(TMP_DIR).mkdir(parents=True, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# 3. Buscar posts recentes via endpoint público (com paginação)
-# ---------------------------------------------------------------------------
-def fetch_recent_posts(subreddit: str, total_limit: int) -> list[dict]:
+def fetch_posts_from_endpoint(subreddit: str, category: str, limit: int) -> list[dict]:
     """
-    Busca até `total_limit` posts mais recentes de um subreddit.
-    Usa https://www.reddit.com/r/{sub}/new.json (público, sem auth).
-    A API retorna no máximo 100 posts por request; usa 'after' para paginar.
+    Busca posts de uma categoria específica (new, hot, top, rising).
     """
-    base_url = f"https://www.reddit.com/r/{subreddit}/new.json"
+    base_url = f"https://www.reddit.com/r/{subreddit}/{category}.json"
     headers = {"User-Agent": USER_AGENT}
-
     all_posts = []
-    after = None
-    fetched = 0
-    page = 0
+    
+    params = {"limit": min(100, limit), "raw_json": 1}
+    if category == "top":
+        params["t"] = "week"  # Top da semana
 
-    print(f"📡 Buscando até {total_limit} posts recentes de r/{subreddit}...")
+    try:
+        resp = requests.get(base_url, headers=headers, params=params, timeout=15)
+    except Exception as e:
+        print(f"   ❌ Erro conex ({category}): {e}")
+        return []
 
-    while fetched < total_limit:
-        batch_size = min(100, total_limit - fetched)
-        params = {"limit": batch_size, "raw_json": 1}
-        if after:
-            params["after"] = after
+    if resp.status_code != 200:
+        print(f"   ⚠️ Erro {resp.status_code} em r/{subreddit}/{category}")
+        return []
 
-        page += 1
+    data = resp.json().get("data", {})
+    children = data.get("children", [])
 
-        try:
-            resp = requests.get(base_url, headers=headers, params=params, timeout=15)
-        except requests.ConnectionError:
-            print(f"   ❌ Sem conexão à internet ao acessar r/{subreddit}.")
-            return all_posts
-        except requests.Timeout:
-            print(f"   ⏱️ Timeout ao acessar r/{subreddit}.")
-            return all_posts
-
-        # Subreddit inexistente ou privado
-        if resp.status_code in (404, 403):
-            print(f"   ⚠️ r/{subreddit} não encontrado ou é privado. Pulando.")
-            return []
-
-        # Rate limit (429)
-        if resp.status_code == 429:
-            retry_after = int(resp.headers.get("Retry-After", "60"))
-            print(f"   ⏳ Rate limit atingido. Aguardando {retry_after}s...")
-            time.sleep(retry_after)
-            continue  # Tentar novamente a mesma página
-
-        if resp.status_code != 200:
-            print(f"   ⚠️ Erro {resp.status_code} ao buscar r/{subreddit}: {resp.text[:200]}")
-            return all_posts
-
-        data = resp.json().get("data", {})
-        children = data.get("children", [])
-
-        if not children:
-            break
-
-        for child in children:
-            d = child.get("data", {})
-            all_posts.append({
-                "subreddit": d.get("subreddit", subreddit),
-                "title": d.get("title", ""),
-                "score": d.get("score", 0),
-                "num_comments": d.get("num_comments", 0),
-                "upvote_ratio": d.get("upvote_ratio", 0.0),
-                "author": d.get("author", "[deleted]"),
-                "url": d.get("url", ""),
-                "created_utc": d.get("created_utc", 0),
-                "permalink": f"https://reddit.com{d.get('permalink', '')}",
-                "selftext": d.get("selftext", "")[:500],
-                "link_flair_text": d.get("link_flair_text", ""),
-            })
-
-        fetched += len(children)
-        after = data.get("after")
-
-        print(f"   📄 Página {page}: +{len(children)} posts (total: {fetched})")
-
-        if not after:
-            break
-
-        # Pausa entre requests para evitar rate limit (Reddit público pede ~2s)
-        time.sleep(2)
-
-    print(f"   ✅ {len(all_posts)} posts coletados de r/{subreddit}")
+    for child in children:
+        d = child.get("data", {})
+        all_posts.append({
+            "id": d.get("id", ""),
+            "subreddit": d.get("subreddit", subreddit),
+            "title": d.get("title", ""),
+            "score": d.get("score", 0),
+            "num_comments": d.get("num_comments", 0),
+            "upvote_ratio": d.get("upvote_ratio", 0.0),
+            "author": d.get("author", "[deleted]"),
+            "url": d.get("url", ""),
+            "created_utc": d.get("created_utc", 0),
+            "permalink": f"https://reddit.com{d.get('permalink', '')}",
+            "selftext": d.get("selftext", "")[:500],
+            "link_flair_text": d.get("link_flair_text", ""),
+            "category_source": category # Marcamos a origem
+        })
+    
+    print(f"   📄 {category}: +{len(all_posts)} posts")
+    time.sleep(1) # Respectful delay
     return all_posts
+
+def fetch_all_categories(subreddit: str, total_limit: int) -> list[dict]:
+    """Busca posts de todas as categorias e deduplica."""
+    categories = ["new", "hot", "top", "rising"]
+    # Divide o limite entre as categorias, mas garante um mínimo
+    limit_per_cat = max(25, total_limit // len(categories))
+    
+    deduplicated = {}
+    
+    print(f"📡 Buscando posts de r/{subreddit} (new, hot, top, rising)...")
+    
+    for cat in categories:
+        posts = fetch_posts_from_endpoint(subreddit, cat, limit_per_cat)
+        for p in posts:
+            if p["id"] not in deduplicated:
+                deduplicated[p["id"]] = p
+            else:
+                # Se já existe, podemos atualizar o score se for mais recente (opcional)
+                pass
+                
+    results = list(deduplicated.values())
+    print(f"   ✅ Total único: {len(results)} posts coletados de r/{subreddit}")
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +195,7 @@ def main():
         for sub in subreddits:
             # Passo 1: Buscar posts recentes
             log.info(f"Buscando {FETCH_LIMIT} posts de r/{sub}...")
-            raw_posts = fetch_recent_posts(sub, total_limit=FETCH_LIMIT)
+            raw_posts = fetch_all_categories(sub, total_limit=FETCH_LIMIT)
             all_raw[sub] = raw_posts
 
             if not raw_posts:

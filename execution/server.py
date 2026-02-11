@@ -266,6 +266,51 @@ def add_community(name: str) -> dict:
     }
 
 
+def remove_community(name: str) -> dict:
+    """Remove uma comunidade do TARGET_SUBREDDITS no .env."""
+    communities = get_communities()
+    name_clean = name.strip()
+
+    # Encontrar o nome exato (case-insensitive)
+    match_name = None
+    for c in communities:
+        if c.lower() == name_clean.lower():
+            match_name = c
+            break
+
+    if not match_name:
+        return {
+            "error": f"r/{name_clean} não está registrada no sistema.",
+            "communities": communities,
+        }
+
+    # Ler .env
+    env_path = Path(PROJECT_DIR) / ".env"
+    if not env_path.exists():
+        return {"error": "Arquivo .env não encontrado."}
+
+    content = env_path.read_text(encoding="utf-8")
+
+    # Remover a comunidade da lista
+    updated_communities = [c for c in communities if c.lower() != name_clean.lower()]
+    new_value = ",".join(updated_communities)
+
+    pattern = r"(TARGET_SUBREDDITS=)(.*)"
+    content = re.sub(pattern, f"TARGET_SUBREDDITS={new_value}", content)
+
+    env_path.write_text(content, encoding="utf-8")
+
+    # Atualizar env em memória
+    load_dotenv(override=True)
+    updated = get_communities()
+
+    return {
+        "success": True,
+        "message": f"🗑️ r/{match_name} removida do sistema.",
+        "communities": updated,
+    }
+
+
 # ---------------------------------------------------------------------------
 # HTTP Handler
 # ---------------------------------------------------------------------------
@@ -336,6 +381,61 @@ class DashboardHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(result)
             return
 
+        if path == "/api/remove-community":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8")
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self._send_json({"error": "JSON inválido."})
+                return
+
+            name = data.get("name", "").strip()
+            if not name:
+                self._send_json({"error": "Nome da comunidade é obrigatório."})
+                return
+
+            result = remove_community(name)
+            self._send_json(result)
+            return
+
+        if path == "/api/run-pipeline":
+            import subprocess as _sp
+            scripts = [
+                os.path.join(SCRIPT_DIR, "fetch_reddit_posts.py"),
+                os.path.join(SCRIPT_DIR, "format_posts.py"),
+                os.path.join(SCRIPT_DIR, "generate_app.py"),
+            ]
+            steps_names = ["Buscando posts do Reddit", "Formatando dados", "Gerando dashboard"]
+            errors = []
+            for script, step_name in zip(scripts, steps_names):
+                try:
+                    proc = _sp.run(
+                        [sys.executable, script],
+                        cwd=PROJECT_DIR,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                    if proc.returncode != 0:
+                        errors.append(f"{step_name}: {proc.stderr.strip()[:300]}")
+                except _sp.TimeoutExpired:
+                    errors.append(f"{step_name}: timeout (>120s)")
+                except Exception as e:
+                    errors.append(f"{step_name}: {str(e)}")
+
+            if errors:
+                self._send_json({
+                    "success": False,
+                    "error": "Erros durante o pipeline:\n" + "\n".join(errors),
+                })
+            else:
+                self._send_json({
+                    "success": True,
+                    "message": "✅ Pipeline executado! Recarregue a página para ver os novos dados.",
+                })
+            return
+
         self._send_json({"error": "Rota não encontrada."}, status=404)
 
     def do_OPTIONS(self):
@@ -390,6 +490,7 @@ def main():
     print(f"    📊 Dashboard .............. http://localhost:{PORT}/")
     print(f"    🔍 Buscar post ............ GET  /api/fetch-post?url=...")
     print(f"    ➕ Adicionar comunidade .... POST /api/add-community")
+    print(f"    🗑️  Remover comunidade ..... POST /api/remove-community")
     print(f"    📋 Listar comunidades ...... GET  /api/communities")
     print()
     print("  Ctrl+C para parar\n")
