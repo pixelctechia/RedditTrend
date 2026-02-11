@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RedditPulse — Top 10 trending Reddit posts per subreddit, ranked by engagement.">
+  <meta name="keywords" content="Reddit, trending, posts, subreddit, engagement, dashboard, open-source">
+  <meta name="author" content="pixelctechia">
+  <title>RedditPulse — Top 10 Trending Reddit Posts</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- ===== HERO ===== -->
+  <header class="hero" id="hero">
+    <div class="hero__particles" id="particles"></div>
+    <div class="hero__content">
+      <span class="hero__badge">🔓 No API Keys Required</span>
+      <h1 class="hero__title">
+        <span class="hero__logo">🔥</span> Reddit<span class="hero__accent">Pulse</span>
+      </h1>
+      <p class="hero__tagline">Top 10 trending Reddit posts per subreddit — ranked by engagement, not just upvotes.</p>
+      <div class="hero__cta">
+        <a href="https://github.com/pixelctechia/RedditTrend" class="btn btn--primary" id="btn-github">
+          ⭐ View on GitHub
+        </a>
+        <a href="#quickstart" class="btn btn--secondary" id="btn-quickstart">
+          🚀 Quick Start
+        </a>
+      </div>
+    </div>
+    <div class="hero__mockup">
+      <div class="mockup">
+        <div class="mockup__header">
+          <span class="mockup__dot mockup__dot--red"></span>
+          <span class="mockup__dot mockup__dot--yellow"></span>
+          <span class="mockup__dot mockup__dot--green"></span>
+          <span class="mockup__title">RedditPulse Dashboard</span>
+        </div>
+        <div class="mockup__body">
+          <div class="mockup__sidebar">
+            <div class="mockup__sub mockup__sub--active"><span class="dot dot--orange"></span> Python</div>
+            <div class="mockup__sub"><span class="dot dot--yellow"></span> JavaScript</div>
+            <div class="mockup__sub"><span class="dot dot--blue"></span> DevOps</div>
+            <div class="mockup__sub"><span class="dot dot--green"></span> Linux</div>
+            <div class="mockup__sub"><span class="dot dot--purple"></span> AI</div>
+          </div>
+          <div class="mockup__main">
+            <div class="mockup__card" id="post-1">
+              <span class="mockup__rank">#1</span>
+              <div class="mockup__info">
+                <div class="mockup__post-title">Python 3.14 released with...</div>
+                <div class="mockup__meta">🔼 2.5k &nbsp; 💬 420</div>
+              </div>
+            </div>
+            <div class="mockup__card" id="post-2">
+              <span class="mockup__rank">#2</span>
+              <div class="mockup__info">
+                <div class="mockup__post-title">Best async frameworks in 2026</div>
+                <div class="mockup__meta">🔼 1.8k &nbsp; 💬 312</div>
+              </div>
+            </div>
+            <div class="mockup__card" id="post-3">
+              <span class="mockup__rank">#3</span>
+              <div class="mockup__info">
+                <div class="mockup__post-title">I built an AI agent that codes</div>
+                <div class="mockup__meta">🔼 1.2k &nbsp; 💬 287</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== FEATURES ===== -->
+  <section class="features" id="features">
+    <h2 class="section__title">✨ Features</h2>
+    <div class="features__grid">
+      <div class="feature-card" id="feat-engagement">
+        <div class="feature-card__icon">🧠</div>
+        <h3>Smart Ranking</h3>
+        <p>Custom engagement formula weighing upvotes, comments, and approval ratio.</p>
+      </div>
+      <div class="feature-card" id="feat-dashboard">
+        <div class="feature-card__icon">📊</div>
+        <h3>Interactive Dashboard</h3>
+        <p>Beautiful self-contained HTML dashboard with tabs per subreddit.</p>
+      </div>
+      <div class="feature-card" id="feat-modes">
+        <div class="feature-card__icon">🏆</div>
+        <h3>Dual View Modes</h3>
+        <p>"Top Relevant" by engagement and "Most Recent" with time filters.</p>
+      </div>
+      <div class="feature-card" id="feat-import">
+        <div class="feature-card__icon">➕</div>
+        <h3>Import Posts</h3>
+        <p>Fetch any Reddit post by URL directly from the dashboard.</p>
+      </div>
+      <div class="feature-card" id="feat-noauth">
+        <div class="feature-card__icon">🔓</div>
+        <h3>No API Keys</h3>
+        <p>Uses Reddit's public endpoints. No OAuth, no tokens, no hassle.</p>
+      </div>
+      <div class="feature-card" id="feat-articles">
+        <div class="feature-card__icon">📝</div>
+        <h3>Markdown Articles</h3>
+        <p>Auto-generated article per post with frontmatter and engagement metrics.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== QUICK START ===== -->
+  <section class="quickstart" id="quickstart">
+    <h2 class="section__title">🚀 Quick Start</h2>
+    <div class="steps">
+      <div class="step" id="step-1">
+        <div class="step__number">1</div>
+        <div class="step__content">
+          <h3>Clone</h3>
+          <pre><code>git clone https://github.com/pixelctechia/RedditTrend.git
+cd RedditTrend</code></pre>
+        </div>
+      </div>
+      <div class="step" id="step-2">
+        <div class="step__number">2</div>
+        <div class="step__content">
+          <h3>Setup</h3>
+          <pre><code>python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt</code></pre>
+        </div>
+      </div>
+      <div class="step" id="step-3">
+        <div class="step__number">3</div>
+        <div class="step__content">
+          <h3>Configure</h3>
+          <pre><code># Edit .env
+TARGET_SUBREDDITS=python,javascript,devops</code></pre>
+        </div>
+      </div>
+      <div class="step" id="step-4">
+        <div class="step__number">4</div>
+        <div class="step__content">
+          <h3>Run</h3>
+          <pre><code>python execution/fetch_reddit_posts.py
+python execution/format_posts.py
+python execution/generate_app.py
+python execution/server.py</code></pre>
+        </div>
+      </div>
+    </div>
+    <p class="quickstart__note">Then open <strong>http://localhost:5050</strong> in your browser 🎉</p>
+  </section>
+
+  <!-- ===== FORMULA ===== -->
+  <section class="formula" id="formula">
+    <h2 class="section__title">🧠 Engagement Score</h2>
+    <div class="formula__box">
+      <code class="formula__code">
+        engagement = (score × 1.0) + (comments × 2.0) + (upvote_ratio × 50.0)
+      </code>
+      <p class="formula__note">Comments are weighted 2× higher because they indicate deeper engagement.</p>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer" id="footer">
+    <p>Made with ❤️ by <a href="https://github.com/pixelctechia">pixelctechia</a></p>
+    <p class="footer__disclaimer">Reddit™ is a trademark of Reddit, Inc. This project is unofficial and not affiliated with Reddit.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
